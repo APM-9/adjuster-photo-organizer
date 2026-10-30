@@ -278,12 +278,18 @@ async function photoView(claim, room, photoId) {
 }
 
 let lastZip = null;
+const zipSignature = (claim, photos) => JSON.stringify([
+  claim.number, claim.notes, claim.rooms.map((r) => [r.id, r.name, r.notes, r.measurements, r.replaceList]),
+  photos.map((p) => [p.id, p.roomId, p.seq, p.shows, p.showsOther, p.location, p.damage, p.notes]),
+]);
 
 async function exportView(claim) {
   const photos = await store.photosByClaim(claim.id);
   const summary = buildSummary(claim, photos);
   const unlabeled = photos.filter((p) => !p.shows).length;
-  const ready = lastZip?.claimId === claim.id;
+  // A zip is only offered while it still matches the claim's photos and labels.
+  const signature = zipSignature(claim, photos);
+  const ready = lastZip?.claimId === claim.id && lastZip.signature === signature;
   const canShare = ready && navigator.canShare?.({ files: [lastZip.file] });
   return shell({
     title: 'Export',
@@ -738,7 +744,7 @@ const actions = {
       const photos = await store.photosByClaim(claim.id);
       const blob = await buildZip(claim, photos, (pct) => busy(`Building zip… ${Math.round(pct)}%`));
       const name = `${claim.number.replace(/[^A-Za-z0-9-]+/g, '-')}_photos.zip`;
-      lastZip = { claimId: claim.id, file: new File([blob], name, { type: 'application/zip' }) };
+      lastZip = { claimId: claim.id, signature: zipSignature(claim, photos), file: new File([blob], name, { type: 'application/zip' }) };
       render();
     } catch (err) {
       toast(errorText(err), 5000);
