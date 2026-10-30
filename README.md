@@ -1,5 +1,7 @@
 # Field Photos
 
+M.L.E. Flood Adjuster app.
+
 A mobile-first photo and notes organizer for flood claim field adjusters. It runs in Safari on iPhone with nothing to install. It sits before Xactimate: every photo is sorted by room, renamed and labeled on site, so at home they upload with no re-sorting.
 
 No login, no server, no connection to Xactimate/XactAnalysis. Data stays on the phone: claims and notes in localStorage, photos in IndexedDB.
