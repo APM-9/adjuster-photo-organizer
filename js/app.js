@@ -6,6 +6,7 @@ import { photoFileName, showsText } from './naming.js';
 import { buildZip, buildSummary, buildCsv, printReport, formatDate, fileStem } from './export.js';
 import { sortedDamages, damageTitle, damageDetail, openDamageEditor } from './damage.js';
 import { openMarkup } from './markup.js';
+import * as sync from './sync.js';
 import {
   esc, uid, plural, icon, toast, busy, errorText, openSheet, closeSheet, autosize,
   chipGroup, wireChips, attachMic, micButton,
@@ -19,7 +20,22 @@ const libraryInput = document.getElementById('library-input');
 
 let claims = store.loadClaims();
 let persistTimer;
-const persist = () => { clearTimeout(persistTimer); store.saveClaims(claims); };
+// Content fingerprints, used to stamp each claim with its last edit time
+// (sync keeps the most recent edit) and to notice deleted claims.
+let hashes = new Map(claims.map((c) => [c.id, store.contentHash(c)]));
+function persist() {
+  clearTimeout(persistTimer);
+  const now = Date.now();
+  for (const c of claims) {
+    const h = store.contentHash(c);
+    if (hashes.get(c.id) !== h || !c.updatedAt) { c.updatedAt = now; hashes.set(c.id, h); }
+  }
+  for (const id of [...hashes.keys()]) {
+    if (!claims.some((c) => c.id === id)) { hashes.delete(id); sync.claimDeleted(id); }
+  }
+  store.saveClaims(claims);
+  sync.schedule();
+}
 const persistSoon = () => { clearTimeout(persistTimer); persistTimer = setTimeout(persist, 300); };
 window.addEventListener('pagehide', persist);
 
@@ -67,7 +83,9 @@ async function render() {
   const token = ++renderToken;
   const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   let html;
-  if (p[0] === 'claim' && p[1]) {
+  if (p[0] === 'account') {
+    html = accountView();
+  } else if (p[0] === 'claim' && p[1]) {
     const claim = findClaim(p[1]);
     if (!claim) return go('');
     if (p[2] === 'room' && p[3]) {
@@ -110,6 +128,7 @@ async function claimsView() {
   return shell({
     title: 'Claims',
     sub: 'Field damage & photo notes',
+    tools: `<a class="sync-pill" href="#/account" data-sync-pill data-state="${sync.getStatus().code}">${syncPill()}</a>`,
     body: `
       <button class="btn primary xl" data-action="new-claim">${icon('plus')}New claim</button>
       ${list.length ? `<ul class="cards">${list.map((c) => `
@@ -271,6 +290,61 @@ async function photoView(claim, room, photoId) {
         <button class="btn danger-ghost" data-action="delete-photo" data-id="${p.id}" data-next="${next?.id || prev?.id || ''}">${icon('trash')}Delete photo</button>
       </div>`,
   });
+}
+
+const SYNC_PILL = {
+  off: 'Phone only', 'signed-out': 'Sign in', syncing: 'Syncing…', synced: 'Synced', offline: 'Offline', error: 'Sync error',
+};
+const syncPill = () => `${icon('cloud')}<span>${SYNC_PILL[sync.getStatus().code]}</span>`;
+
+function syncLine() {
+  const { code, message } = sync.getStatus();
+  const last = sync.lastSync() ? new Date(sync.lastSync()).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  if (code === 'syncing') return 'Syncing…';
+  if (code === 'offline') return 'Offline. Changes are saved on this phone and sync when you are back online.';
+  if (code === 'error') return `Sync problem: ${message || 'unknown error'}. It will retry automatically.`;
+  return last ? `Up to date. Last synced ${last}.` : 'Not synced yet.';
+}
+
+function accountView() {
+  let body;
+  if (!sync.configured) {
+    body = `
+      <section class="panel">
+        <h2>Cloud sync is not set up</h2>
+        <p class="muted">Everything is saved on this phone only. Sync turns on once this copy of the app is connected to its cloud account.</p>
+      </section>`;
+  } else if (!sync.userEmail()) {
+    body = `
+      <section class="panel">
+        <h2>Sign in to sync</h2>
+        <p class="muted">Back up claims and photos, and use them on more than one device. Everything keeps working offline.</p>
+        <form id="auth-form" class="stack">
+          <label class="field"><span>Email</span>
+            <input name="email" type="email" autocomplete="email" autocapitalize="off" required></label>
+          <label class="field"><span>Password</span>
+            <input name="password" type="password" autocomplete="current-password" minlength="8" required></label>
+          <div class="btn-row">
+            <button class="btn secondary" value="signup">Create account</button>
+            <button class="btn primary" value="signin">Sign in</button>
+          </div>
+        </form>
+      </section>`;
+  } else {
+    body = `
+      <section class="panel">
+        <h2>Cloud sync</h2>
+        <p>Signed in as <b>${esc(sync.userEmail())}</b></p>
+        <p class="sync-line ${sync.getStatus().code}">${esc(syncLine())}</p>
+        <button class="btn primary xl" data-action="sync-now">${icon('cloud')}Sync now</button>
+      </section>
+      <p class="muted small">Claims and photos are stored in your private account; no one else can see them. Demo claims are not synced.</p>
+      <div class="footer-tools">
+        <button class="btn danger-ghost" data-action="sign-out">Sign out</button>
+        <p class="muted small">Signing out keeps everything on this phone.</p>
+      </div>`;
+  }
+  return shell({ title: 'Account', sub: 'Cloud sync', back: '', body });
 }
 
 let lastZip = null;
@@ -720,6 +794,7 @@ const actions = {
         try {
           photo.original = photo.original || photo.blob;
           Object.assign(photo, await encodeImage(canvas));
+          photo.blobRev = (photo.blobRev || 1) + 1;
           await store.putPhoto(photo);
           dropUrls(photo.id);
         } catch (err) {
@@ -736,6 +811,7 @@ const actions = {
     if (!photo?.original || !confirm('Remove the markup and restore the original photo?')) return;
     Object.assign(photo, await encodeImage(await loadImage(photo.original)), { blob: photo.original });
     delete photo.original;
+    photo.blobRev = (photo.blobRev || 1) + 1;
     await store.putPhoto(photo);
     dropUrls(photo.id);
     render();
@@ -812,6 +888,12 @@ const actions = {
       toast('Select all and copy');
     }
   },
+  'sync-now': () => sync.syncNow(),
+  'sign-out': async () => {
+    if (!confirm('Sign out? Everything stays on this phone, but it stops syncing until you sign in again.')) return;
+    await sync.signOut();
+    render();
+  },
   print: async (el) => {
     const claim = findClaim(el.dataset.id);
     try {
@@ -851,9 +933,59 @@ document.addEventListener('input', (e) => {
   persistSoon();
 });
 
+document.addEventListener('submit', async (e) => {
+  if (e.target.id !== 'auth-form') return;
+  e.preventDefault();
+  const form = e.target;
+  const mode = e.submitter?.value || 'signin';
+  busy(mode === 'signup' ? 'Creating account…' : 'Signing in…');
+  try {
+    if (mode === 'signup') {
+      const result = await sync.signUp(form.email.value.trim(), form.password.value);
+      if (result === 'confirm') toast('Check your email and tap the confirmation link, then sign in here.', 6000);
+    } else {
+      await sync.signIn(form.email.value.trim(), form.password.value);
+    }
+  } catch (err) {
+    toast(err.message || String(err), 5000);
+  } finally {
+    busy(null);
+    render();
+  }
+});
+
+// Changes from sync redraw the screen, unless someone is typing on it.
+function renderUnlessTyping() {
+  const el = document.activeElement;
+  if (el && $app.contains(el) && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+  render();
+}
+
+sync.onStatus(() => {
+  document.querySelectorAll('[data-sync-pill]').forEach((el) => {
+    el.innerHTML = syncPill();
+    el.dataset.state = sync.getStatus().code;
+  });
+  if (location.hash.startsWith('#/account')) renderUnlessTyping();
+});
+
 // ---------- boot ----------
 
 store.requestPersistence();
+sync.init({
+  getClaims: () => claims,
+  flush: persist,
+  applyClaims: (next) => {
+    claims = next;
+    hashes = new Map(claims.map((c) => [c.id, store.contentHash(c)]));
+    store.saveClaims(claims);
+    renderUnlessTyping();
+  },
+  photosUpdated: (ids) => {
+    ids.forEach(dropUrls);
+    renderUnlessTyping();
+  },
+});
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }

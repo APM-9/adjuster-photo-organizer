@@ -323,3 +323,17 @@ textarea.mono { font: 14px/1.45 ui-monospace, Menlo, monospace; min-height: 200p
   .pr-table tr { break-inside: avoid; }
   .pr-foot { margin-top: 16pt; padding-top: 6pt; border-top: 1px solid #999; font-size: 8.5pt; color: #444; }
 }
+
+/* ---------- sync ---------- */
+.sync-pill {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px;
+  border-radius: 22px; background: rgba(255, 255, 255, 0.14); color: #fff; font-size: 15px; font-weight: 700;
+  white-space: nowrap;
+}
+.sync-pill .ic { width: 20px; height: 20px; }
+.sync-pill[data-state="error"] { background: var(--danger); }
+.sync-pill[data-state="synced"] .ic { color: #8fe3a5; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.sync-line { font-weight: 600; }
+.sync-line.error { color: var(--danger); }
+.sync-line.offline { color: var(--warn); }

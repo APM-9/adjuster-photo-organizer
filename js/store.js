@@ -46,20 +46,32 @@ async function photos(mode) {
   return (await db()).transaction('photos', mode).objectStore('photos');
 }
 
-export async function putPhoto(photo) {
+// Hooks for sync: told about local photo changes and deletions.
+export const hooks = { photoChanged: null, photosDeleted: null };
+
+// touch: false when writing data that came from sync, so it is not
+// treated as a new local edit.
+export async function putPhoto(photo, { touch = true } = {}) {
+  if (touch) photo.updatedAt = Date.now();
   const s = await photos('readwrite');
   s.put(photo);
-  return finished(s.transaction);
+  await finished(s.transaction);
+  if (touch) hooks.photoChanged?.(photo);
+}
+
+export async function allPhotos() {
+  return done((await photos('readonly')).getAll());
 }
 
 export async function getPhoto(id) {
   return done((await photos('readonly')).get(id));
 }
 
-export async function deletePhoto(id) {
+export async function deletePhoto(id, { silent = false } = {}) {
   const s = await photos('readwrite');
   s.delete(id);
-  return finished(s.transaction);
+  await finished(s.transaction);
+  if (!silent) hooks.photosDeleted?.([id]);
 }
 
 export async function photosByClaim(claimId) {
@@ -67,18 +79,33 @@ export async function photosByClaim(claimId) {
   return list.sort((a, b) => a.seq - b.seq || a.createdAt - b.createdAt);
 }
 
-async function deleteByIndex(index, key) {
+async function deleteByIndex(index, key, silent) {
   const s = await photos('readwrite');
+  const ids = [];
   const req = s.index(index).openCursor(key);
   req.onsuccess = () => {
     const cursor = req.result;
-    if (cursor) { cursor.delete(); cursor.continue(); }
+    if (cursor) { ids.push(cursor.primaryKey); cursor.delete(); cursor.continue(); }
   };
-  return finished(s.transaction);
+  await finished(s.transaction);
+  if (!silent && ids.length) hooks.photosDeleted?.(ids);
+  return ids;
 }
 
-export const deletePhotosByClaim = (claimId) => deleteByIndex('claimId', claimId);
-export const deletePhotosByRoom = (roomId) => deleteByIndex('roomId', roomId);
+export const deletePhotosByClaim = (claimId, { silent = false } = {}) => deleteByIndex('claimId', claimId, silent);
+export const deletePhotosByRoom = (roomId, { silent = false } = {}) => deleteByIndex('roomId', roomId, silent);
+
+// Fingerprint of a claim's content, ignoring its edit time. Used to tell
+// which claims changed since they were last saved or synced.
+export function contentHash(obj) {
+  const text = JSON.stringify({ ...obj, updatedAt: undefined });
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36) + text.length.toString(36);
+}
 
 export async function requestPersistence() {
   try {

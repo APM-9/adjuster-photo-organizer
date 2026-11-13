@@ -1,10 +1,10 @@
 // Offline cache. Bump VERSION when shipping changes.
-const VERSION = 'fp-v2';
+const VERSION = 'fp-v3';
 const APP = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/config.js', 'js/store.js', 'js/images.js', 'js/naming.js', 'js/export.js',
-  'js/ui.js', 'js/damage.js', 'js/markup.js',
-  'icon-180.png', 'icon-192.png', 'icon-512.png', 'vendor/jszip.min.js',
+  'js/ui.js', 'js/damage.js', 'js/markup.js', 'js/sync.js', 'js/sync-config.js',
+  'icon-180.png', 'icon-192.png', 'icon-512.png', 'vendor/jszip.min.js', 'vendor/supabase.js',
 ];
 const JSZIP = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
 
