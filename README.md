@@ -8,6 +8,8 @@ It is not an estimating tool and does not connect to one. No login, no server: d
 
 Not affiliated with or endorsed by Verisk or Xactimate.
 
+Product brief, business plan and open questions: [docs/HANDOFF.md](docs/HANDOFF.md).
+
 ## What it does
 
 | Handoff MVP item | Status |
@@ -61,4 +63,4 @@ Then open http://localhost:8000. Dictation and offline caching need HTTPS.
 - **Sync and accounts.** Needs a backend (Supabase or Firebase) and a decision on where homeowners' data lives. All storage goes through `js/store.js`.
 - **Encryption at rest.** Data on the phone is protected by iOS device encryption, not by the app. Needed with accounts and before firm pilots.
 - **Privacy policy.**
-- Team accounts, templates, FileTrac export, sketch helpers.
+- Team accounts, templates, FileTrac export, sketch helpers (see the handoff).
