@@ -1,7 +1,7 @@
 // Image compression and demo placeholders.
 import { PHOTO_MAX_SIDE, PHOTO_QUALITY, THUMB_MAX_SIDE } from './config.js';
 
-function loadImage(blob) {
+export function loadImage(blob) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob);
     const img = new Image();
@@ -30,7 +30,7 @@ function toBlob(canvas, quality) {
   });
 }
 
-async function encode(source) {
+export async function encodeImage(source) {
   const full = scaled(source, PHOTO_MAX_SIDE);
   const blob = await toBlob(full, PHOTO_QUALITY);
   const thumb = await toBlob(scaled(full, THUMB_MAX_SIDE), 0.72);
@@ -40,7 +40,7 @@ async function encode(source) {
 }
 
 export async function compressImage(file) {
-  return encode(await loadImage(file));
+  return encodeImage(await loadImage(file));
 }
 
 const PALETTE = {
@@ -85,5 +85,5 @@ export async function makePlaceholder({ shows, room, location }) {
   ctx.font = 'bold 30px -apple-system, system-ui, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.fillText('DEMO PLACEHOLDER PHOTO', 600, 840);
-  return encode(canvas);
+  return encodeImage(canvas);
 }

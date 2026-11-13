@@ -2,26 +2,40 @@
 
 M.L.E. Flood Adjuster app.
 
-A mobile-first photo and notes organizer for flood claim field adjusters. It runs in Safari on iPhone with nothing to install. It sits before Xactimate: every photo is sorted by room, renamed and labeled on site, so at home they upload with no re-sorting.
+A mobile-first app for flood claim field adjusters. It captures damage room by room on site (damage lines, photos, voice notes) and exports a clean list to enter into the estimate at home. It runs in Safari on iPhone with nothing to install, and works offline.
 
-No login, no server, no connection to Xactimate/XactAnalysis. Data stays on the phone: claims and notes in localStorage, photos in IndexedDB.
+It is not an estimating tool and does not connect to one. No login, no server: data stays on the phone (claims, rooms and damage lines in localStorage, photos in IndexedDB).
+
+Not affiliated with or endorsed by Verisk or Xactimate.
+
+## What it does
+
+| Handoff MVP item | Status |
+| --- | --- |
+| 1. Claim: number, address, date of loss, loss type | Done |
+| 2. Rooms | Done |
+| 3. Damage lines: category, action, quantity + unit, water line, notes | Done |
+| 4. Photos per room or per damage line, with markup | Done |
+| 5. Voice-to-text notes | Done (browser dictation, plus the iPhone keyboard mic) |
+| 6. Offline | Done. Sync is not built: it needs a backend and accounts |
+| 7. Export: PDF, text, CSV in room-by-room scoping order | Done |
+
+Exports list each room's damage ceiling to floor, then fixtures and contents (order set in `js/config.js`). The zip holds one folder per room of renamed photos (`24-18831_Kitchen_Drywall_NorthWall_03.jpg`), `summary.txt` and the damage CSV.
 
 ## Open it on an iPhone
 
-1. Host the folder on any HTTPS static host. This repo is private, so GitHub Pages needs a paid plan; free options are Netlify Drop (drag the folder onto app.netlify.com/drop), Cloudflare Pages or Vercel, each connected to this repo.
-2. On the iPhone, open Safari and go to the site address.
-3. Tap **Share → Add to Home Screen**. Launch it from the home-screen icon from then on. This matters: iOS can clear site data for Safari tabs that go unused for 7 days, but not for home-screen apps.
-4. Allow camera and microphone when asked.
+Deployed on Netlify from `main` (every push redeploys).
 
-HTTPS is required for dictation and offline mode. All of the hosts above give you HTTPS.
+1. In Safari, open the site address.
+2. Tap **Share → Add to Home Screen**, and launch it from that icon from then on. iOS can clear site data for Safari tabs unused for 7 days, but not for home-screen apps.
+3. Allow camera and microphone when asked.
 
 ## Testing on a computer
 
 ```
-cd adjuster-photo-organizer
 python3 -m http.server 8000
 ```
-Then open http://localhost:8000. Plain `http://` on a phone over Wi-Fi works for photos, but dictation and offline caching need HTTPS.
+Then open http://localhost:8000. Dictation and offline caching need HTTPS.
 
 ## Files
 
@@ -29,16 +43,22 @@ Then open http://localhost:8000. Plain `http://` on a phone over Wi-Fi works for
 | --- | --- |
 | `index.html` | App shell |
 | `styles.css` | High-contrast theme + print report layout |
-| `js/config.js` | Room, label, location and damage lists; photo size settings |
-| `js/store.js` | localStorage + IndexedDB |
-| `js/images.js` | Photo compression (1600px long side, JPEG 0.82) and demo placeholders |
-| `js/naming.js` | File names, e.g. `24-18831_Kitchen_Drywall_NorthWall_03.jpg` |
-| `js/export.js` | Zip, text summary, printable report |
+| `js/config.js` | Rooms, damage categories (in scoping order) with default units, actions, loss types, photo labels, disclaimer |
 | `js/app.js` | Screens, navigation, capture and labeling flow |
+| `js/damage.js` | Damage line editor and ordering |
+| `js/markup.js` | Draw on photos |
+| `js/ui.js` | Shared UI helpers (sheets, chips, toasts, dictation) |
+| `js/store.js` | localStorage + IndexedDB. The one place to add sync |
+| `js/images.js` | Photo compression (1600px long side, JPEG 0.82) and demo placeholders |
+| `js/naming.js` | Photo file names |
+| `js/export.js` | Zip, text summary, CSV, PDF report |
 | `sw.js` | Offline cache (bump `VERSION` when shipping changes) |
 | `vendor/jszip.min.js` | Local JSZip, used when the CDN can't be reached |
+| `netlify.toml` | Netlify settings |
 
-## Adding later
+## Not built yet
 
-- Xactimate-style category names: edit the lists in `js/config.js`.
-- Shareable report links / cloud backup: would need a backend; `js/store.js` is the only file that touches storage.
+- **Sync and accounts.** Needs a backend (Supabase or Firebase) and a decision on where homeowners' data lives. All storage goes through `js/store.js`.
+- **Encryption at rest.** Data on the phone is protected by iOS device encryption, not by the app. Needed with accounts and before firm pilots.
+- **Privacy policy.**
+- Team accounts, templates, FileTrac export, sketch helpers.
