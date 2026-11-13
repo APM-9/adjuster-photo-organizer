@@ -129,7 +129,9 @@ export async function signIn(email, password) {
 }
 
 export async function signUp(email, password) {
-  const { data, error } = await client.auth.signUp({ email, password });
+  // Send the confirmation link back to this app, not the project's default site.
+  const emailRedirectTo = location.origin + location.pathname;
+  const { data, error } = await client.auth.signUp({ email, password, options: { emailRedirectTo } });
   if (error) throw error;
   if (!data.session) return 'confirm';
   session = data.session;
@@ -178,13 +180,20 @@ export function syncNow() {
       saveState();
       setStatus('synced');
     } catch (err) {
-      setStatus(navigator.onLine ? 'error' : 'offline', err.message || String(err));
+      setStatus(navigator.onLine ? 'error' : 'offline', describe(err));
     }
   })().finally(() => {
     running = null;
     if (rerun) { rerun = false; schedule(1000); }
   });
   return running;
+}
+
+function describe(err) {
+  if (err?.code === 'PGRST205' || /Bucket not found/i.test(err?.message || '')) {
+    return 'the cloud database is not set up yet (run supabase/schema.sql in Supabase)';
+  }
+  return err?.message || String(err);
 }
 
 // ---------- pull ----------
