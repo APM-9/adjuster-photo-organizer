@@ -72,3 +72,6 @@ create policy "own photo files: replace" on storage.objects for update to authen
 drop policy if exists "own photo files: delete" on storage.objects;
 create policy "own photo files: delete" on storage.objects for delete to authenticated
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- Make the new tables visible to the app right away.
+notify pgrst, 'reload schema';
